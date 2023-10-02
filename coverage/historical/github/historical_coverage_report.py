@@ -44,6 +44,7 @@ def main():
         total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, token)
     if workspace_considered == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
+        return
     total_coverage /= workspace_considered
     print(f"Workspaces analyzed: {workspace_considered}")
     print(f"Total coverage across all workspaces: {total_coverage * 100:.2f}")
@@ -115,7 +116,7 @@ def process_pr(repo_coverage, prs_considered, pr, repo, workspace, token):
         
         repo_coverage += coverage_percentage
         prs_considered += 1
-        return (repo_coverage, prs_considered)
+    return (repo_coverage, prs_considered)
 
 def process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewers, token):
     """
