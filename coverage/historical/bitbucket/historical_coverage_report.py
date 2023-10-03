@@ -1,18 +1,43 @@
-from datetime import datetime
+"""
+Bitbucket PR Coverage Analyzer
+
+This script calculates the coverage percentage of merged pull requests based on the number of deletions that were reviewed.
+
+How to run:
+1. Install virtualenv:
+   $ pip install virtualenv
+
+2. Create a new virtual environment:
+   $ virtualenv venv
+
+3. Activate the virtual environment:
+   On Windows: venv\Scripts\activate
+   On macOS and Linux: source venv/bin/activate
+
+4. Install the required packages:
+   $ pip install -r requirements.txt
+
+5. Add your config like username, app_password in the script at the top
+
+6. Run the script:
+   $ python historical_coverage_report.py
+
+When prompted, enter your GitHub token. Optionally, you can also provide a custom API URL or use the default (https://api.github.com).
+
+"""
 import re
 import requests
 import json
 import base64
 from urllib.parse import quote
 
-
-
-BASE_URL = "https://api.bitbucket.org/2.0"
 username = "rtapish"
 app_password = "ATBBRrc4kErjKAyBXKXtUTfM5HJB7F388C19"
+BASE_URL = "https://api.bitbucket.org/2.0"
+NUM_CHARS_DIFF = 4
+
 credentials = f"{username}:{app_password}"
 base64_encoded_credentials = base64.b64encode(credentials.encode()).decode()
-NUM_CHARS_DIFF = 4
 
 
 def main():
