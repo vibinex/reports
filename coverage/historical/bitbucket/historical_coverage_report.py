@@ -21,9 +21,6 @@ How to run:
 
 6. Run the script:
    $ python historical_coverage_report.py
-
-When prompted, enter your GitHub token. Optionally, you can also provide a custom API URL or use the default (https://api.github.com).
-
 """
 import re
 import requests
