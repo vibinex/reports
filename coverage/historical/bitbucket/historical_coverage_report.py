@@ -143,11 +143,6 @@ def process_file(total_unapproved_deletions, total_deletions, total_unassigned, 
     new_commit_hash = pr['destination']['commit']['hash']
     filepath = file['old']['path']
     diff = get_diff(workspace, repo['slug'], old_commit_hash, new_commit_hash, filepath)
-    # blame = get_blame(workspace, repo, old_commit_hash, filepath)
-    # print(f"\n\n\n\n pr = {pr}")
-    # if not blame:
-    #     print(f"Could not get blame for commit: {pr['baseRefOid']}, file: {file['filename']}")
-    #     return (total_unapproved_deletions, total_deletions, total_unassigned)
     unapproved_deletions_file, total_deletions_file, unassigned_authors = calculate_coverage_percentage(workspace, repo, pr, file, diff, reviewers, commit_cache, diff_cache)
     if total_deletions_file == 0:
         # print(f"                No deletions in PR #{pr['number']} in file {file['filename']}, not included in coverage calculation")
