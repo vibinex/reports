@@ -67,7 +67,11 @@ Total coverage across all workspaces: 50.00
 
 ## About Coverage Percentage
 
-Coverage Percentage in this context refers to the percentage of deletions in merged pull requests that were reviewed. It provides an insight into how much of the code that was removed was actually looked at by reviewers. A higher percentage indicates that more of the deleted code was reviewed, ensuring that the removal was appropriate and didn't introduce any issues.
+In a pull/merge request, if the author overwrites a developer's code but fails to get the overwritten code reviewed by that developer, we call it unreviewed or un-'covered' code. 
+
+Example - In a pull/merge request, out of 100 lines of code in the diff, 20 lines are uncovered/unreviewed. The coverage is 80%.
+
+A higher coverage percent is good and indicates how much of the code that was overwritten was actually looked at by reviewers. A higher percentage indicates that more of the overwritten code was reviewed, ensuring that the change was appropriate and didn't introduce any issues.
 
 ## GitHub PR Coverage Analyzer
 
@@ -144,5 +148,3 @@ This script is similar to the GitHub PR Coverage Analyzer but is tailored for Bi
   ```
 
 ---
-
-**Note**: Always ensure you have the necessary permissions and tokens to access and analyze repositories.
