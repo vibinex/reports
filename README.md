@@ -71,7 +71,7 @@ In a pull/merge request, if the author overwrites a developer's code but fails t
 
 Example - In a pull/merge request, out of 100 lines of code in the diff, 20 lines are uncovered/unreviewed. The coverage is 80%.
 
-A higher coverage percent is good and indicates how much of the code that was overwritten was actually looked at by reviewers. A higher percentage indicates that more of the overwritten code was reviewed, ensuring that the change was appropriate and didn't introduce any issues.
+A higher coverage percent is good and indicates how much of the code that was overwritten was actually looked at by relevant reviewers. A higher percentage indicates that more of the overwritten code was reviewed, ensuring that the change was appropriate and didn't introduce any issues.
 
 ## GitHub PR Coverage Analyzer
 
@@ -99,14 +99,14 @@ This script calculates the coverage percentage of merged pull requests on GitHub
   ```
 
 4. Install the required packages:
-  ```bash
-  pip install -r requirements.txt
-  ```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 5. Run the script:
-  ```bash
-  python historical_coverage_report.py
-  ```
+    ```bash
+    python historical_coverage_report.py
+    ```
 
 6. When prompted, enter the personal access token generated in step 1. If you use github cloud, you don't need to provide BASE_URL, just press Enter. Otherwise, enter your github organization's url.
 
@@ -136,15 +136,13 @@ This script is similar to the GitHub PR Coverage Analyzer but is tailored for Bi
   ```
 
 4. Install the required packages:
-  ```bash
-  pip install -r requirements.txt
-  ```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 5. Replace `username` and `app_password` at the top of the script with your username and the app password generated in step 1
 
 6. Run the script:
-  ```bash
-  python historical_coverage_report.py
-  ```
-
----
+    ```bash
+    python historical_coverage_report.py
+    ```
