@@ -18,14 +18,13 @@ How to run:
    $ pip install -r requirements.txt
 
 5. Run the script:
-   $ python script_name.py
+   $ python historical_coverage_report.py
 
 When prompted, enter your GitHub token. Optionally, you can also provide a custom API URL or use the default (https://api.github.com).
 
 """
 import re
 import requests
-import json
 
 BASE_URL = "https://api.github.com"
 
