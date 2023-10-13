@@ -1,6 +1,6 @@
 # Repository Coverage Report
 
-This repository contains scripts to generate coverage report for github and bitbucket. Sample output - 
+This repository contains scripts to generate coverage report for github and bitbucket. Sample output -
 ```
 Workspace: alokit-innovations
   Repository: dev-profiler
@@ -67,7 +67,7 @@ Total coverage across all workspaces: 50.00
 
 ## About Coverage Percentage
 
-In a pull/merge request, if the author overwrites a developer's code but fails to get the overwritten code reviewed by that developer, we call it unreviewed or un-'covered' code. 
+In a pull/merge request, if the author overwrites a developer's code but fails to get the overwritten code reviewed by that developer, we call it unreviewed or un-'covered' code.
 
 Example - In a pull/merge request, out of 100 lines of code in the diff, 20 lines are uncovered/unreviewed. The coverage is 80%.
 
@@ -89,11 +89,11 @@ This script calculates the coverage percentage of merged pull requests on GitHub
     ```
 
 3. Activate the virtual environment:
-- On Windows: 
+- On Windows:
   ```bash
   venv\Scripts\activate
   ```
-- On macOS and Linux: 
+- On macOS and Linux:
   ```bash
   source venv/bin/activate
   ```
@@ -109,6 +109,23 @@ This script calculates the coverage percentage of merged pull requests on GitHub
     ```
 
 6. When prompted, enter the personal access token generated in step 1. If you use github cloud, you don't need to provide BASE_URL, just press Enter. Otherwise, enter your github organization's url.
+
+Alternatively, if you want to run this in the background, you can create an input file with your personal access token and the GitHub API URL.
+
+`input.txt`:
+```
+your_github_auth_token
+https://api.github.com
+```
+And then run the python command in the background:
+```bash
+python3 -u historical_coverage_report.py < input.txt > output.txt &
+```
+
+You can monitor the output by using the `tail` command:
+```bash
+tail -f output.txt
+```
 
 ## Bitbucket PR Coverage Analyzer
 
@@ -126,11 +143,11 @@ This script is similar to the GitHub PR Coverage Analyzer but is tailored for Bi
     ```
 
 3. Activate the virtual environment:
-- On Windows: 
+- On Windows:
   ```bash
   venv\Scripts\activate
   ```
-- On macOS and Linux: 
+- On macOS and Linux:
   ```bash
   source venv/bin/activate
   ```
