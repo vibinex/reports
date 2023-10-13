@@ -1,6 +1,63 @@
 # Repository Coverage Report
 
-This repository contains scripts to generate the coverage report of merged pull requests based on the number of deletions that were reviewed for both GitHub and Bitbucket.
+This repository contains scripts to generate coverage report for github and bitbucket. Sample output - 
+```
+Workspace: alokit-innovations
+  Repository: dev-profiler
+        Processing Pr #10
+     Processing PR #10 with author: vibi-test and reviewers: ['Tapish Rathore', 'vibi-test']
+    Total deletions considered in PR: 12, unapproved deletions: 0, repo_coverage: 1, prs_considered: 1
+    ============<Coverage percentage for Merged PR #10: 100.00%>=============
+        Processing Pr #4
+        No non-author deletions in PR #4, not included in coverage calculation
+        Processing Pr #2
+        No non-author deletions in PR #2, not included in coverage calculation
+        Processing Pr #1
+        No non-author deletions in PR #1, not included in coverage calculation
+    # of prs considered = 1 in repo dev-profiler. workspace_coverage: 1.0
+    ~~~~~~~~~~~~><><><><><><Coverage percentage for Repository dev-profiler = 100.00%><>><><><><~~~~~~~~~~~~~~
+  Repository: repo-profiler-pipe
+        Processing Pr #7
+        No non-author deletions in PR #7, not included in coverage calculation
+        Processing Pr #6
+    ============<Relevant authors who did not review the PR: {'Tapish Rathore'}>=============
+     Processing PR #6 with author: Avikalp Gupta and reviewers: ['Avikalp Gupta']
+    Total deletions considered in PR: 3, unapproved deletions: 3, repo_coverage: 0.0, prs_considered: 1
+    ============<Coverage percentage for Merged PR #6: 0.00%>=============
+        Processing Pr #5
+        No non-author deletions in PR #5, not included in coverage calculation
+        Processing Pr #4
+        No non-author deletions in PR #4, not included in coverage calculation
+        Processing Pr #3
+            Skipped Users = {'{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+        No non-author deletions in PR #3, not included in coverage calculation
+        Processing Pr #2
+            Skipped Users = {'{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+        No non-author deletions in PR #2, not included in coverage calculation
+        Processing Pr #1
+            Skipped Users = {'{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+            Skipped Users = {'{"raw": "Bitbucket Pipelines Push Bot <commits-noreply@bitbucket.org>", "type": "author"}', '{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+            Skipped Users = {'{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+            Skipped Users = {'{"raw": "Bitbucket Pipelines Push Bot <commits-noreply@bitbucket.org>", "type": "author"}', '{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+            Skipped Users = {'{"raw": "bitbucket-pipelines <commits-noreply@bitbucket.org>", "type": "author"}'}
+        No non-author deletions in PR #1, not included in coverage calculation
+    # of prs considered = 1 in repo repo-profiler-pipe. workspace_coverage: 1.0
+    ~~~~~~~~~~~~><><><><><><Coverage percentage for Repository repo-profiler-pipe = 0.00%><>><><><><~~~~~~~~~~~~~~
+  Repository: pipeline-testing
+No valid prs in repo pipeline-testing, not including in coverage calculation
+  Repository: pipeline
+No valid prs in repo pipeline, not including in coverage calculation
+  Repository: demo-repo
+        Processing Pr #3
+        No non-author deletions in PR #3, not included in coverage calculation
+        Processing Pr #2
+        No non-author deletions in PR #2, not included in coverage calculation
+No valid prs in repo demo-repo, not including in coverage calculation
+Total repos considered = 2, total_coverage = 0.5
+######################### Coverage percentage for Workspace alokit-innovations = 50.00% #####################################
+Workspaces analyzed: 1
+Total coverage across all workspaces: 50.00
+```
 
 ## Table of Contents
 
