@@ -40,7 +40,12 @@ def main():
     total_coverage = 0
     workspace_considered = 0
     for workspace in get_workspaces(token):
-        total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, token)
+        try:
+            total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, token)
+        except Exception as e:
+            print(f"[ERROR] Something went wrong while processing the workspace {workspace}:", e)
+            continue
+
     if workspace_considered == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
         return
@@ -56,7 +61,11 @@ def process_workspace(total_coverage, workspace_considered, workspace, token):
     workspace_coverage = 0
     repos_considered = 0
     for repo in get_repositories(token, workspace):
-        workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
+        try:
+            workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
+        except Exception as e:
+            print(f"[ERROR] Something went wrong while processing the repo {workspace}/{repo}:", e)
+            continue
     if repos_considered == 0:
         print(f"No valid repos in workspace {workspace}, not including in coverage calculation")
         return (total_coverage, workspace_considered)
@@ -76,7 +85,14 @@ def process_repo(workspace_coverage, repos_considered, repo, workspace, token):
     repo_coverage = 0
     prs_considered = 0
     for pr in get_pull_requests(token, workspace, repo):
-        repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, token)
+        try:
+            repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, token)
+        except Exception as e:
+            if 'number' in pr:
+                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr['number']}:", e)
+            else:
+                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr}:", e)
+            continue
     if prs_considered == 0:
         print(f"No valid prs in repo {repo}, not including in coverage calculation")
         return (workspace_coverage, repos_considered)
