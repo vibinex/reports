@@ -89,9 +89,7 @@ def process_repo(workspace_coverage, repos_considered, repo, workspace, token):
             repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, token)
         except Exception as e:
             if 'number' in pr:
-                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr['number']}:", e)
-            else:
-                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr}:", e)
+                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr.get('number', str(pr))}:", e)
             continue
     if prs_considered == 0:
         print(f"No valid prs in repo {repo}, not including in coverage calculation")
