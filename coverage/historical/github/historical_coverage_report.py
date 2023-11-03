@@ -43,7 +43,7 @@ def main():
         try:
             total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, token)
         except Exception as e:
-            print(f"[ERROR] Something went wrong while processing the workspace {workspace}:", e)
+            print(f"  [ERROR] Something went wrong while processing the workspace {workspace}:", e)
             continue
 
     if workspace_considered == 0:
@@ -57,17 +57,17 @@ def process_workspace(total_coverage, workspace_considered, workspace, token):
     """
     Process each workspace and calculate the coverage.
     """
-    print(f"Workspace: {workspace}")
+    print("="*30 + "\n" + f"Workspace: {workspace}")
     workspace_coverage = 0
     repos_considered = 0
     for repo in get_repositories(token, workspace):
         try:
             workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
         except Exception as e:
-            print(f"[ERROR] Something went wrong while processing the repo {workspace}/{repo}:", e)
+            print(f"    [ERROR] Something went wrong while processing the repo {workspace}/{repo}:", e)
             continue
     if repos_considered == 0:
-        print(f"No valid repos in workspace {workspace}, not including in coverage calculation")
+        print(f"  No valid repos in workspace {workspace}, not including in coverage calculation")
         return (total_coverage, workspace_considered)
     workspace_considered += 1
     workspace_coverage /= repos_considered
@@ -89,10 +89,10 @@ def process_repo(workspace_coverage, repos_considered, repo, workspace, token):
             repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, token)
         except Exception as e:
             if 'number' in pr:
-                print(f"[ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr.get('number', str(pr))}:", e)
+                print(f"      [ERROR] Something went wrong while processing this PR {workspace}/{repo}/{pr.get('number', str(pr))}:", e)
             continue
     if prs_considered == 0:
-        print(f"No valid prs in repo {repo}, not including in coverage calculation")
+        print(f"    No valid prs in repo {repo}, not including in coverage calculation")
         return (workspace_coverage, repos_considered)
     repos_considered += 1
     repo_coverage /= prs_considered
@@ -148,7 +148,7 @@ def process_file(total_unapproved_deletions, total_deletions, total_unassigned, 
     diff = file['patch']
     blame = get_blame_for_commit(token, workspace, repo, pr['baseRefOid'], file['filename'])
     if not blame:
-        print(f"Could not get blame for commit: {pr['baseRefOid']}, file: {file['filename']}")
+        print(f"        [WARN] Could not get blame for commit: {pr['baseRefOid']}, file: {file['filename']}")
         return (total_unapproved_deletions, total_deletions, total_unassigned)
     unapproved_deletions_file, total_deletions_file, unassigned_authors = calculate_coverage_percentage(diff, blame, reviewers, pr['author']['login'])
     if total_deletions_file == 0:
