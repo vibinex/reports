@@ -48,7 +48,11 @@ def main():
     total_coverage = 0
     workspace_considered = 0
     for workspace in get_workspaces(headers):
-        total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, headers)
+        try:
+            total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, headers)
+        except Exception as e:
+            print(f"[ERROR] Something went wrong while processing the workspace {workspace}:", e)
+
     if workspace_considered == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
         return
@@ -64,7 +68,10 @@ def process_workspace(total_coverage, workspace_considered, workspace, token):
     workspace_coverage = 0
     repos_considered = 0
     for repo in get_repositories(token, workspace):
-        workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
+        try:
+            workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
+        except Exception as e:
+            print(f"  [ERROR] Something went wrong while processing the repo {workspace}/{repo}:", e)
     if repos_considered == 0:
         print(f"No valid repos in workspace {workspace}, not including in coverage calculation")
         return (total_coverage, workspace_considered)
@@ -87,9 +94,12 @@ def process_repo(workspace_coverage, repos_considered, repo, workspace, token):
     diff_cache = {}
     for pr in get_pull_requests(token, workspace, repo['slug']):
         print(f"        Processing Pr #{pr['id']}")
-        repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, commit_cache, diff_cache)
+        try:
+            repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, commit_cache, diff_cache)
+        except Exception as e:
+            print(f"        [ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:", e)
     if prs_considered == 0:
-        print(f"No valid prs in repo {repo['slug']}, not including in coverage calculation")
+        print(f"    No valid prs in repo {repo['slug']}, not including in coverage calculation")
         return (workspace_coverage, repos_considered)
     repos_considered += 1
     repo_coverage /= prs_considered
