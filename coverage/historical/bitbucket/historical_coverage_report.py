@@ -194,6 +194,7 @@ def prompt_for_workspaces(all_workspaces):
         inquirer.Checkbox('workspaces',
                           message="Select the workspaces to analyze",
                           choices=all_workspaces,
+                          default=all_workspaces,
                           ),
     ]
 
@@ -216,10 +217,12 @@ def prompt_for_repositories(all_repositories):
     """
     Prompt the user to select the repositories they want to analyze using checkboxes.
     """
+    options = [repo['slug'] for repo in all_repositories]
     questions = [
         inquirer.Checkbox('repositories',
                           message="Select the repositories you want to analyze",
-                          choices=[repo['slug'] for repo in all_repositories],
+                          choices=options,
+                          default=options,
                           ),
     ]
 
