@@ -27,6 +27,7 @@ import requests
 import json
 import base64
 from urllib.parse import quote
+import inquirer
 
 username = "rtapish"
 app_password = "ATBBRrc4kErjKAyBXKXtUTfM5HJB7F388C19"
@@ -45,9 +46,14 @@ def main():
         "Authorization": f"Basic {base64_encoded_credentials}"
     }
 
+    all_workspaces = get_workspaces(headers)
+    # Prompt user for workspace selection
+    selected_workspaces = prompt_for_workspaces(all_workspaces)
+
     total_coverage = 0
     workspace_considered = 0
-    for workspace in get_workspaces(headers):
+
+    for workspace in selected_workspaces:
         try:
             total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, headers)
         except Exception as e:
@@ -65,13 +71,17 @@ def process_workspace(total_coverage, workspace_considered, workspace, token):
     Process each workspace and calculate the coverage.
     """
     print(f"Workspace: {workspace}")
+    all_repos = get_repositories(token, workspace)
+    selected_repos = prompt_for_repositories(all_repos)
+
     workspace_coverage = 0
     repos_considered = 0
-    for repo in get_repositories(token, workspace):
+
+    for repo in selected_repos:
         try:
             workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
         except Exception as e:
-            print(f"  [ERROR] Something went wrong while processing the repo {workspace}/{repo}:", e)
+            print(f"  [ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:", e)
     if repos_considered == 0:
         print(f"No valid repos in workspace {workspace}, not including in coverage calculation")
         return (total_coverage, workspace_considered)
@@ -176,6 +186,22 @@ def get_workspaces(headers):
     data = response.json()
     return [workspace['slug'] for workspace in data['values']]
 
+def prompt_for_workspaces(all_workspaces):
+    """
+    Prompt the user to select the workspaces they want to analyze using checkboxes.
+    """
+    questions = [
+        inquirer.Checkbox('workspaces',
+                          message="Select the workspaces to analyze",
+                          choices=all_workspaces,
+                          ),
+    ]
+
+    answers = inquirer.prompt(questions)
+
+    selected_workspaces = answers['workspaces']
+    return selected_workspaces
+
 def get_repositories(headers, workspace):
     """
     Retrieve the list of repositories for a given workspace.
@@ -185,6 +211,22 @@ def get_repositories(headers, workspace):
     response.raise_for_status()
     data = response.json()
     return [repo for repo in data['values']]
+
+def prompt_for_repositories(all_repositories):
+    """
+    Prompt the user to select the repositories they want to analyze using checkboxes.
+    """
+    questions = [
+        inquirer.Checkbox('repositories',
+                          message="Select the repositories you want to analyze",
+                          choices=[repo['slug'] for repo in all_repositories],
+                          ),
+    ]
+
+    answers = inquirer.prompt(questions)
+
+    selected_repos = [repo for repo in all_repositories if repo.get('slug') in answers['repositories']]
+    return selected_repos
 
 def get_pull_requests(headers, workspace, repo_name):
     """
