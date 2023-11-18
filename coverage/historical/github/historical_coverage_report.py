@@ -25,6 +25,7 @@ When prompted, enter your GitHub token. Optionally, you can also provide a custo
 """
 import re
 import requests
+import inquirer
 
 BASE_URL = "https://api.github.com"
 
@@ -37,9 +38,12 @@ def main():
     if not BASE_URL:
         BASE_URL = "https://api.github.com"
 
+    all_workspaces = get_workspaces(token)
+    selected_workspaces = prompt_for_workspaces(all_workspaces)
+
     total_coverage = 0
     workspace_considered = 0
-    for workspace in get_workspaces(token):
+    for workspace in selected_workspaces:
         try:
             total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, token)
         except Exception as e:
@@ -58,9 +62,12 @@ def process_workspace(total_coverage, workspace_considered, workspace, token):
     Process each workspace and calculate the coverage.
     """
     print("="*30 + "\n" + f"Workspace: {workspace}")
+    all_repositories = get_repositories(token, workspace)
+    selected_repositories = prompt_for_repositories(all_repositories)
+
     workspace_coverage = 0
     repos_considered = 0
-    for repo in get_repositories(token, workspace):
+    for repo in selected_repositories:
         try:
             workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
         except Exception as e:
@@ -196,6 +203,22 @@ def get_workspaces(token):
     result = run_query(query, token)
     return [org['login'] for org in result['data']['viewer']['organizations']['nodes']]
 
+def prompt_for_workspaces(all_workspaces):
+    """
+    Prompt the user to select the workspaces they want to analyze using checkboxes.
+    """
+    questions = [
+        inquirer.Checkbox('workspaces',
+                          message="Select the workspaces to analyze",
+                          choices=all_workspaces,
+                          default=all_workspaces,
+                          ),
+    ]
+
+    answers = inquirer.prompt(questions)
+
+    selected_workspaces = answers['workspaces']
+    return selected_workspaces
 
 def get_repositories(token, workspace):
     """
@@ -219,6 +242,22 @@ def get_repositories(token, workspace):
         print(f"Warning: Organization '{workspace}' not found or no access.")
         return []
 
+def prompt_for_repositories(all_repositories):
+    """
+    Prompt the user to select the repositories they want to analyze using checkboxes.
+    """
+    questions = [
+        inquirer.Checkbox('repositories',
+                          message="Select the repositories you want to analyze",
+                          choices=all_repositories,
+                          default=all_repositories,
+                          ),
+    ]
+
+    answers = inquirer.prompt(questions)
+
+    selected_repos = answers['repositories']
+    return selected_repos
 
 def get_pull_requests(token, workspace, repo_name):
     """
