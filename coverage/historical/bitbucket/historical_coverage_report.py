@@ -29,6 +29,8 @@ import base64
 from urllib.parse import quote
 import inquirer
 from tqdm import tqdm
+import json
+import sys
 
 username = "rtapish"
 app_password = "ATBBRrc4kErjKAyBXKXtUTfM5HJB7F388C19"
@@ -51,104 +53,150 @@ def main():
     # Prompt user for workspace selection
     selected_workspaces = prompt_for_workspaces(all_workspaces)
 
-    total_coverage = 0
-    workspace_considered = 0
+    report = {
+        'total_coverage': 0,
+        'workspace_considered': 0,
+        'workspaces': [],
+        'skipped_workspaces': []
+    }
 
-    for workspace in selected_workspaces:
+    for workspace in tqdm(selected_workspaces, desc='Processing workspaces:'):
         try:
-            total_coverage, workspace_considered = process_workspace(total_coverage, workspace_considered, workspace, headers)
+            process_workspace(workspace, headers, report)
         except Exception as e:
-            print(f"[ERROR] Something went wrong while processing the workspace {workspace}:", e)
+            report['skipped_workspaces'].append({
+                'name': workspace['name'],
+                'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}:" + str(e),
+            })
 
-    if workspace_considered == 0:
+    if report['workspace_considered'] == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
         return
-    total_coverage /= workspace_considered
-    print(f"Workspaces analyzed: {workspace_considered}")
-    print(f"Total coverage across all workspaces: {total_coverage * 100:.2f}")
+    
+    for workspace in report['workspaces']:
+        print(f"[Workspace: {workspace['name']}] coverage: {workspace['coverage'] * 100:.2f} across {workspace['repos_considered']} repositories")
+        for repo in workspace['repositories']:
+            print(f"  [Repo: {repo['name']}] coverage: {repo['coverage'] * 100:.2f} across {repo['prs_considered']} pull requests")
+            for pr in repo['pull_requests']:
+                print(f"    [PR: {pr['id']}] coverage: {pr['coverage'] * 100:.2f}")
+    report['total_coverage'] /= report['workspace_considered']
+    print(f"Workspaces analyzed: {report['workspace_considered']}")
+    print(f"Total coverage across all workspaces: {report['total_coverage'] * 100:.2f}")
+    with open('report.json', 'w') as f:
+        json.dump(report, f, indent=4)
+    sys.stderr.flush()
 
-def process_workspace(total_coverage, workspace_considered, workspace, token):
+def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_considered': 0}):
     """
     Process each workspace and calculate the coverage.
     """
-    print(f"Workspace: {workspace}")
     all_repos = get_repositories(token, workspace)
     selected_repos = prompt_for_repositories(all_repos)
 
-    workspace_coverage = 0
-    repos_considered = 0
+    workspace_report = {
+        'name': workspace,
+        'coverage': 0,
+        'repos_considered': 0,
+        'repositories': [],
+        'skipped_repos': []
+    }
 
-    for repo in selected_repos:
+    for repo in tqdm(selected_repos, desc=f"  Processing repos in {workspace}:", leave=False):
         try:
-            workspace_coverage, repos_considered = process_repo(workspace_coverage, repos_considered, repo, workspace, token)
+            process_repo(workspace_report, repo, workspace, token)
         except Exception as e:
-            print(f"  [ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:", e)
-    if repos_considered == 0:
-        print(f"No valid repos in workspace {workspace}, not including in coverage calculation")
-        return (total_coverage, workspace_considered)
-    workspace_considered += 1
-    workspace_coverage /= repos_considered
-    total_coverage += workspace_coverage
-    print(f"Total repos considered = {repos_considered}, total_coverage = {total_coverage}")
-    print(f"######################### Coverage percentage for Workspace {workspace} = {workspace_coverage * 100:.2f}% #####################################")
-    print("\n\n\n\n")
-    return (total_coverage, workspace_considered)
+            workspace_report['skipped_repos'].append({
+                'name': f"{workspace}/{repo['slug']}",
+                'reason': f"[ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:" + str(e)
+            })
+    if workspace_report['repos_considered'] == 0:
+        report['skipped_workspaces'].append({
+            'name': workspace,
+            'reason': f"No valid repos in workspace {workspace}, not including in coverage calculation"
+        })
+        return
+    report['workspace_considered'] += 1
+    workspace_report['coverage'] /= workspace_report['repos_considered']
+    report['total_coverage'] += workspace_report['coverage']
+    report['workspaces'].append(workspace_report)
 
-def process_repo(workspace_coverage, repos_considered, repo, workspace, token):
+def process_repo(workspace_report, repo, workspace, token):
     """
     Process each repository within a workspace and calculate the coverage.
     """
-    print(f"  Repository: {repo['slug']}")
-    repo_coverage = 0
-    prs_considered = 0
+    repo_report = {
+        'name': repo['slug'],
+        'coverage': 0,
+        'prs_considered': 0,
+        'pull_requests': [],
+        'skipped_prs': []
+    }
     commit_cache = {}
     diff_cache = {}
-    for pr in get_pull_requests(token, workspace, repo['slug']):
-        print(f"        Processing Pr #{pr['id']}")
+    for pr in tqdm(get_pull_requests(token, workspace, repo['slug']), desc=f"    Processing PRs in {workspace}/{repo['slug']}:", leave=False):
         try:
-            repo_coverage, prs_considered = process_pr(repo_coverage, prs_considered, pr, repo, workspace, commit_cache, diff_cache)
+            process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache)
         except Exception as e:
-            print(f"        [ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:", e)
-    if prs_considered == 0:
-        print(f"    No valid prs in repo {repo['slug']}, not including in coverage calculation")
-        return (workspace_coverage, repos_considered)
-    repos_considered += 1
-    repo_coverage /= prs_considered
-    workspace_coverage += repo_coverage
-    print(f"    # of prs considered = {prs_considered} in repo {repo['slug']}. workspace_coverage: {workspace_coverage}")
-    print(f"    ~~~~~~~~~~~~><><><><><><Coverage percentage for Repository {repo['slug']} = {repo_coverage * 100:.2f}%><>><><><><~~~~~~~~~~~~~~")
-    return (workspace_coverage, repos_considered)
+            repo_report['skipped_prs'].append({
+                'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+                'reason': f"[ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:" + str(e)
+            })
+    if repo_report['prs_considered'] == 0:
+        workspace_report['skipped_repos'].append({
+            'name': f"{workspace}/{repo['slug']}",
+            'reason': f"No valid prs in repo {repo['slug']}, not including in coverage calculation"
+        })
+        return
+    workspace_report['repos_considered'] += 1
+    repo_report['coverage'] /= repo_report['prs_considered']
+    workspace_report['coverage'] += repo_report['coverage']
+    workspace_report['repositories'].append(repo_report)
 
-def process_pr(repo_coverage, prs_considered, pr, repo, workspace, commit_cache, diff_cache):
+def process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache):
     """
     Process each pull request within a repository and calculate the coverage.
     """
-    if pr["state"] == "MERGED":
-        reviewers = get_reviewers_from_activity(workspace, repo['slug'], pr['id'])
-        if 'merge_commit' in pr:
-            reviewers = add_merge_user(reviewers, pr["merge_commit"]["links"]["self"]["href"])
-        reviewer_names = [reviewer['display_name'] for reviewer in reviewers.values()]
-        total_unapproved_deletions = 0
-        total_deletions = 0
-        total_unassigned = set()
-        old_commit_hash = pr['source']['commit']['hash']
-        new_commit_hash = pr['destination']['commit']['hash']
-        for file in get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash):
-           total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewer_names, commit_cache, diff_cache)
-        if total_deletions == 0:
-            print(f"        No non-author deletions in PR #{pr['id']}, not included in coverage calculation")
-            return (repo_coverage, prs_considered)
-        if total_unapproved_deletions < 1 :
-            coverage_percentage = 1
-        else:
-            coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
-            print(f"    ============<Relevant authors who did not review the PR: {total_unassigned}>=============")        
-        repo_coverage += coverage_percentage
-        prs_considered += 1
-        print(f"     Processing PR #{pr['id']} with author: {pr['author']['display_name']} and reviewers: {reviewer_names}")
-        print(f"    Total deletions considered in PR: {total_deletions}, unapproved deletions: {total_unapproved_deletions}, repo_coverage: {repo_coverage}, prs_considered: {prs_considered}")
-        print(f"    ============<Coverage percentage for Merged PR #{pr['id']}: {coverage_percentage * 100:.2f}%>=============")
-    return (repo_coverage, prs_considered)
+    if pr["state"] != "MERGED":
+        repo_report['skipped_prs'].append({
+            'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+            'reason': f"PR #{pr['id']} is not merged, not included in coverage calculation"
+        })
+        return
+    reviewers = get_reviewers_from_activity(workspace, repo['slug'], pr['id'])
+    if 'merge_commit' in pr:
+        reviewers = add_merge_user(reviewers, pr["merge_commit"]["links"]["self"]["href"])
+    reviewer_names = [reviewer['display_name'] for reviewer in reviewers.values()]
+    total_unapproved_deletions = 0
+    total_deletions = 0
+    total_unassigned = set()
+    old_commit_hash = pr['source']['commit']['hash']
+    new_commit_hash = pr['destination']['commit']['hash']
+    for file in tqdm(get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash), desc=f"      Processing files in PR #{pr['id']}:", leave=False):
+        total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewer_names, commit_cache, diff_cache)
+    if total_deletions == 0:
+        repo_report['skipped_prs'].append({
+            'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+            'reason': f"No non-author deletions in PR #{pr['id']}, not included in coverage calculation"
+        })
+        return
+    if total_unapproved_deletions < 1 :
+        coverage_percentage = 1
+    else:
+        coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
+    repo_report['coverage'] += coverage_percentage
+    repo_report['prs_considered'] += 1
+    repo_report['pull_requests'].append({
+        'id': pr['id'],
+        'author': pr['author']['display_name'],
+        'reviewers': reviewer_names,
+        'total_deletions': total_deletions,
+        'total_unapproved_deletions': total_unapproved_deletions,
+        'relevant_authors_who_did_not_review': list(total_unassigned),
+        'coverage': coverage_percentage
+    })
+    # print(f"     Processing PR #{pr['id']} with author: {pr['author']['display_name']} and reviewers: {reviewer_names}")
+    # print(f"    Total deletions considered in PR: {total_deletions}, unapproved deletions: {total_unapproved_deletions}, repo_coverage: {repo_report['coverage']}, prs_considered: {repo_report['prs_considered']}")
+    # print(f"    ============<Coverage percentage for Merged PR #{pr['id']}: {coverage_percentage * 100:.2f}%>=============")
 
 def process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewers, commit_cache, diff_cache):
     """
@@ -214,7 +262,7 @@ def get_repositories(headers, workspace):
     data = response.json()
     repos = data['values']
     total_repos = data['size']
-    with tqdm(total=total_repos, initial=len(repos), desc=f"  Fetching repos") as progress_bar:
+    with tqdm(total=total_repos, initial=len(repos), desc=f"  Fetching repos", leave=False) as progress_bar:
         while 'next' in data:
             url = data['next']
             response = requests.get(url, headers=headers)
@@ -251,7 +299,7 @@ def get_pull_requests(headers, workspace, repo_name):
     response.raise_for_status()
     data = response.json()
     prs = data['values']
-    with tqdm(total=data['size'], initial=len(data['values']), desc=f"    Fetching pull requests") as progress_bar:
+    with tqdm(total=data['size'], initial=len(data['values']), desc=f"    Fetching pull requests", leave=False) as progress_bar:
         while 'next' in data:
             url = data['next']
             response = requests.get(url, headers=headers)
@@ -378,18 +426,18 @@ def calculate_coverage_percentage(workspace, repo, pr, file, diff, reviewers, co
     # First, get the list of commits for the file up to the base commit.
     commits = get_commits_for_file(workspace, repo['slug'], file_path, commit_id)
     if not commits:
-        print(f"No commits for file diff: {diff}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] No commits for file diff: {diff}")
         return None
     # Then, fetch the diffs for each of these commits.
     diffs = [get_diff_for_commit(workspace, repo['slug'], commit["hash"], file_path, diff_cache) for commit in commits]
     if not diffs:
-        print(f"[calculate_coverage_percentage] no diffs for commits: {commits}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] no diffs for commits: {commits}")
         return None
     skipped_users = set()
-    for line in deleted_lines:
+    for line in tqdm(deleted_lines, desc='        Calculating coverage:', leave=False):
         blame_author = reconstruct_blame(commits, diffs, line, commit_cache)
         if not blame_author:
-            print(f"No blame author found for line : {line} in file diff: {file['old']['path']}, will be considered approved")
+            sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] No blame author found for line : {line} in file diff: {file['old']['path']}, will be considered approved")
             continue
         if 'user' not in blame_author:
             skipped_users.add(json.dumps(blame_author, sort_keys=True))
@@ -401,7 +449,7 @@ def calculate_coverage_percentage(workspace, repo, pr, file, diff, reviewers, co
             unapproved_deletions += 1
             unassigned_relevant.add(blame_author['user']['display_name'])
     if skipped_users:
-        print(f"            Skipped Users = {skipped_users}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] Skipped Users = {skipped_users}")
     return (unapproved_deletions, total_deletions, unassigned_relevant)
 
 def get_deleted_lines(diffstr):
@@ -451,7 +499,7 @@ def get_commits_for_file(workspace, repo_slug, file_path, commit_id):
     while url:
         response = requests.get(url, headers=headers)
         if not response.ok:
-            print(f"[get_commits_for_file] error in response = {response.text}")
+            sys.stderr.write(f"[{workspace}/{repo_slug}/{commit_id}/{file_path}] [get_commits_for_file] error in file-history response = {response.text}")
             return None
         data = response.json()
         commits.extend([value["commit"] for value in data["values"]])
@@ -471,7 +519,7 @@ def get_diff_for_commit(workspace, repo_slug, commit_id, filepath, diff_cache):
     params = {"path": filepath}
     response = requests.get(url, headers=headers, params=params)
     if not response.ok:
-        print(f"No diff for commit: {commit_id}, file: {filepath}")
+        sys.stderr.write(f"[{workspace}/{repo_slug}] No diff for commit: {commit_id}, file: {filepath}")
         return None
     diff = response.text
     diff_cache[cache_key] = diff
@@ -489,7 +537,7 @@ def get_commit_author(commit_url, commit_cache):
         return commit_cache[cache_key]
     response = requests.get(commit_url, headers=headers)
     if not response.ok:
-        print(f"[get_commit_author] error in response = {response.text}")
+        sys.stderr.write(f"\t[get_commit_author] error in getting commit from URL {commit_url} = {response.text}")
         return None
     response_json = response.json()
     author = response_json["author"]
