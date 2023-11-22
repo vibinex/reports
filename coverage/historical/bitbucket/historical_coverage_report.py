@@ -28,6 +28,7 @@ import json
 import base64
 from urllib.parse import quote
 import inquirer
+from tqdm import tqdm
 
 username = "rtapish"
 app_password = "ATBBRrc4kErjKAyBXKXtUTfM5HJB7F388C19"
@@ -211,7 +212,17 @@ def get_repositories(headers, workspace):
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     data = response.json()
-    return [repo for repo in data['values']]
+    repos = data['values']
+    total_repos = data['size']
+    with tqdm(total=total_repos, initial=len(repos), desc=f"  Fetching repos") as progress_bar:
+        while 'next' in data:
+            url = data['next']
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            repos.extend(data['values'])
+            progress_bar.update(len(data['values']))
+    return repos
 
 def prompt_for_repositories(all_repositories):
     """
