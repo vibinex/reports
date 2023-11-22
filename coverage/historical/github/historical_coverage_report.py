@@ -130,7 +130,7 @@ def process_pr(repo_coverage, prs_considered, pr, repo, workspace, token):
         else:
             coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
             print(f"    ============<Relevant authors who did not review the PR: {total_unassigned}>=============")
-        print(f"     Processing PR #{pr['number']} with author: {pr['author']['login']} and reviewers: {reviewers}, merged by: {pr['mergedBy']['login']}")
+        print(f"     Processing PR #{pr['number']} with author: {pr['author']['login']} and reviewers: {set(reviewers)}, merged by: {pr['mergedBy']['login']}")
         print(f"    Total deletions considered in PR: {total_deletions}, unapproved deletions: {total_unapproved_deletions}, repo_coverage: {repo_coverage}, prs_considered: {prs_considered}")
         print(f"    ============<Coverage percentage for Merged PR #{pr['number']}: {coverage_percentage * 100:.2f}%>=============")
         
@@ -192,7 +192,7 @@ def get_workspaces(token):
     query = """
     {
       viewer {
-        organizations(first: 100) {
+        organizations(first: 100, orderBy: {field: CREATED_AT, direction: DESC}) {
           nodes {
             login
           }
@@ -227,7 +227,7 @@ def get_repositories(token, workspace):
     query = f"""
     {{
       organization(login: "{workspace}") {{
-        repositories(first: 100) {{
+        repositories(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100) {{
           nodes {{
             name
           }}
@@ -266,7 +266,7 @@ def get_pull_requests(token, workspace, repo_name):
     query = f"""
     {{
       repository(owner: "{workspace}", name: "{repo_name}") {{
-        pullRequests(first: 100) {{
+        pullRequests(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100) {{
           nodes {{
             number
             state
