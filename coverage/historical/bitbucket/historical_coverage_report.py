@@ -60,14 +60,24 @@ def main():
         'skipped_workspaces': []
     }
 
-    for workspace in tqdm(selected_workspaces, desc='Processing workspaces:'):
-        try:
-            process_workspace(workspace, headers, report)
-        except Exception as e:
-            report['skipped_workspaces'].append({
-                'name': workspace['name'],
-                'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}:" + str(e),
-            })
+    try:
+        for workspace in tqdm(selected_workspaces, desc='Processing workspaces:'):
+            try:
+                process_workspace(workspace, headers, report)
+            except Exception as e:
+                report['skipped_workspaces'].append({
+                    'name': workspace['name'],
+                    'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}:" + str(e),
+                })
+    except KeyboardInterrupt as ki:
+        if "manual" not in ki.args:
+            print("\n\nKeyboardInterrupt received, exiting...")
+        if len(report['workspaces']) > 0:
+            report['total_coverage'] /= len(report['workspaces'])
+        with open('report.json', 'w') as f:
+            json.dump(report, f, indent=4)
+        sys.stderr.flush()
+        sys.exit(1)
 
     if report['workspace_considered'] == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
@@ -90,6 +100,8 @@ def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_
     """
     Process each workspace and calculate the coverage.
     """
+    keyboard_interrupted = False
+
     all_repos = get_repositories(token, workspace)
     selected_repos = prompt_for_repositories(all_repos)
 
@@ -100,30 +112,40 @@ def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_
         'repositories': [],
         'skipped_repos': []
     }
+    try:
+        for repo in tqdm(selected_repos, desc=f"  Processing repos in {workspace}:", leave=False):
+            try:
+                process_repo(workspace_report, repo, workspace, token)
+            except Exception as e:
+                workspace_report['skipped_repos'].append({
+                    'name': f"{workspace}/{repo['slug']}",
+                    'reason': f"[ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:" + str(e)
+                })
 
-    for repo in tqdm(selected_repos, desc=f"  Processing repos in {workspace}:", leave=False):
-        try:
-            process_repo(workspace_report, repo, workspace, token)
-        except Exception as e:
-            workspace_report['skipped_repos'].append({
-                'name': f"{workspace}/{repo['slug']}",
-                'reason': f"[ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:" + str(e)
+    except KeyboardInterrupt as ki:
+        if "manual" not in ki.args:
+            print("\n\nKeyboardInterrupt received, exiting...")
+        keyboard_interrupted = True
+    finally:
+        if workspace_report['repos_considered'] == 0:
+            report['skipped_workspaces'].append({
+                'name': workspace,
+                'reason': f"No valid repos in workspace {workspace}, not including in coverage calculation"
             })
-    if workspace_report['repos_considered'] == 0:
-        report['skipped_workspaces'].append({
-            'name': workspace,
-            'reason': f"No valid repos in workspace {workspace}, not including in coverage calculation"
-        })
-        return
-    report['workspace_considered'] += 1
-    workspace_report['coverage'] /= workspace_report['repos_considered']
-    report['total_coverage'] += workspace_report['coverage']
-    report['workspaces'].append(workspace_report)
+        else:
+            report['workspace_considered'] += 1
+            workspace_report['coverage'] /= workspace_report['repos_considered']
+            report['total_coverage'] += workspace_report['coverage']
+            report['workspaces'].append(workspace_report)
+
+    if keyboard_interrupted:
+        raise KeyboardInterrupt("manual")
 
 def process_repo(workspace_report, repo, workspace, token):
     """
     Process each repository within a workspace and calculate the coverage.
     """
+    keyboard_interrupted = False
     repo_report = {
         'name': repo['slug'],
         'coverage': 0,
@@ -131,72 +153,88 @@ def process_repo(workspace_report, repo, workspace, token):
         'pull_requests': [],
         'skipped_prs': []
     }
-    commit_cache = {}
-    diff_cache = {}
-    for pr in tqdm(get_pull_requests(token, workspace, repo['slug']), desc=f"    Processing PRs in {workspace}/{repo['slug']}:", leave=False):
-        try:
-            process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache)
-        except Exception as e:
-            repo_report['skipped_prs'].append({
-                'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-                'reason': f"[ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:" + str(e)
+    try:
+        commit_cache = {}
+        diff_cache = {}
+        for pr in tqdm(get_pull_requests(token, workspace, repo['slug']), desc=f"    Processing PRs in {workspace}/{repo['slug']}:", leave=False):
+            try:
+                process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache)
+            except Exception as e:
+                repo_report['skipped_prs'].append({
+                    'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+                    'reason': f"[ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:" + str(e)
+                })
+    except KeyboardInterrupt as ki:
+        if "manual" not in ki.args:
+            print("\n\nKeyboardInterrupt received, exiting...")
+        keyboard_interrupted = True
+    finally:
+        if repo_report['prs_considered'] == 0:
+            workspace_report['skipped_repos'].append({
+                'name': f"{workspace}/{repo['slug']}",
+                'reason': f"No valid prs in repo {repo['slug']}, not including in coverage calculation"
             })
-    if repo_report['prs_considered'] == 0:
-        workspace_report['skipped_repos'].append({
-            'name': f"{workspace}/{repo['slug']}",
-            'reason': f"No valid prs in repo {repo['slug']}, not including in coverage calculation"
-        })
-        return
-    workspace_report['repos_considered'] += 1
-    repo_report['coverage'] /= repo_report['prs_considered']
-    workspace_report['coverage'] += repo_report['coverage']
-    workspace_report['repositories'].append(repo_report)
+        else:
+            workspace_report['repos_considered'] += 1
+            repo_report['coverage'] /= repo_report['prs_considered']
+            workspace_report['coverage'] += repo_report['coverage']
+            workspace_report['repositories'].append(repo_report)
+    if keyboard_interrupted:
+        raise KeyboardInterrupt("manual")
 
 def process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache):
     """
     Process each pull request within a repository and calculate the coverage.
     """
-    if pr["state"] != "MERGED":
-        repo_report['skipped_prs'].append({
-            'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-            'reason': f"PR #{pr['id']} is not merged, not included in coverage calculation"
-        })
-        return
-    reviewers = get_reviewers_from_activity(workspace, repo['slug'], pr['id'])
-    if 'merge_commit' in pr:
-        reviewers = add_merge_user(reviewers, pr["merge_commit"]["links"]["self"]["href"])
-    reviewer_names = [reviewer['display_name'] for reviewer in reviewers.values()]
-    total_unapproved_deletions = 0
-    total_deletions = 0
-    total_unassigned = set()
-    old_commit_hash = pr['source']['commit']['hash']
-    new_commit_hash = pr['destination']['commit']['hash']
-    for file in tqdm(get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash), desc=f"      Processing files in PR #{pr['id']}:", leave=False):
-        total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewer_names, commit_cache, diff_cache)
-    if total_deletions == 0:
-        repo_report['skipped_prs'].append({
-            'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-            'reason': f"No non-author deletions in PR #{pr['id']}, not included in coverage calculation"
-        })
-        return
-    if total_unapproved_deletions < 1 :
-        coverage_percentage = 1
-    else:
-        coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
-    repo_report['coverage'] += coverage_percentage
-    repo_report['prs_considered'] += 1
-    repo_report['pull_requests'].append({
-        'id': pr['id'],
-        'author': pr['author']['display_name'],
-        'reviewers': reviewer_names,
-        'total_deletions': total_deletions,
-        'total_unapproved_deletions': total_unapproved_deletions,
-        'relevant_authors_who_did_not_review': list(total_unassigned),
-        'coverage': coverage_percentage
-    })
-    # print(f"     Processing PR #{pr['id']} with author: {pr['author']['display_name']} and reviewers: {reviewer_names}")
-    # print(f"    Total deletions considered in PR: {total_deletions}, unapproved deletions: {total_unapproved_deletions}, repo_coverage: {repo_report['coverage']}, prs_considered: {repo_report['prs_considered']}")
-    # print(f"    ============<Coverage percentage for Merged PR #{pr['id']}: {coverage_percentage * 100:.2f}%>=============")
+    keyboard_interrupted = False
+    try:
+        if pr["state"] != "MERGED":
+            repo_report['skipped_prs'].append({
+                'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+                'reason': f"PR #{pr['id']} is not merged, not included in coverage calculation"
+            })
+            return
+        reviewers = get_reviewers_from_activity(workspace, repo['slug'], pr['id'])
+        if 'merge_commit' in pr:
+            reviewers = add_merge_user(reviewers, pr["merge_commit"]["links"]["self"]["href"])
+        reviewer_names = [reviewer['display_name'] for reviewer in reviewers.values()]
+        total_unapproved_deletions = 0
+        total_deletions = 0
+        total_unassigned = set()
+        old_commit_hash = pr['source']['commit']['hash']
+        new_commit_hash = pr['destination']['commit']['hash']
+        for file in tqdm(get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash), desc=f"      Processing files in PR #{pr['id']}:", leave=False):
+            total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewer_names, commit_cache, diff_cache)
+    
+    except KeyboardInterrupt as ki:
+        if "manual" not in ki.args:
+            print("\n\nKeyboardInterrupt received, exiting...")
+        keyboard_interrupted = True
+    finally:
+        if total_deletions == 0:
+            repo_report['skipped_prs'].append({
+                'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+                'reason': f"No non-author deletions in PR #{pr['id']}, not included in coverage calculation"
+            })
+        else:
+            if total_unapproved_deletions < 1 :
+                coverage_percentage = 1
+            else:
+                coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
+            repo_report['coverage'] += coverage_percentage
+            repo_report['prs_considered'] += 1
+            repo_report['pull_requests'].append({
+                'id': pr['id'],
+                'author': pr['author']['display_name'],
+                'reviewers': reviewer_names,
+                'total_deletions': total_deletions,
+                'total_unapproved_deletions': total_unapproved_deletions,
+                'relevant_authors_who_did_not_review': list(total_unassigned),
+                'coverage': coverage_percentage
+            })
+    
+    if keyboard_interrupted:
+        raise KeyboardInterrupt("manual")
 
 def process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewers, commit_cache, diff_cache):
     """
