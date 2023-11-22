@@ -69,7 +69,7 @@ def main():
             except Exception as e:
                 report['skipped_workspaces'].append({
                     'name': workspace,
-                    'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}:" + str(e),
+                    'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}: " + f"{type(e).__name__}: {str(e)}" + "\n\t" + traceback.format_exc()
                 })
     except KeyboardInterrupt as ki:
         if "manual" not in ki.args:
@@ -123,7 +123,7 @@ def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_
             except Exception as e:
                 workspace_report['skipped_repos'].append({
                     'name': f"{workspace}/{repo['slug']}",
-                    'reason': f"[ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}:" + str(e)
+                    'reason': f"[ERROR] Something went wrong while processing the repo {workspace}/{repo['slug']}: " + f"{type(e).__name__}: {str(e)}" + "\n\t" + traceback.format_exc()
                 })
 
     except KeyboardInterrupt as ki:
