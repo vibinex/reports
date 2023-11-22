@@ -181,7 +181,7 @@ def get_workspaces(headers):
     """
     Retrieve the list of workspaces for the authenticated user.
     """
-    url = f"{BASE_URL}/workspaces"
+    url = f"{BASE_URL}/workspaces?sort=-updated_on"
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     data = response.json()
@@ -246,11 +246,20 @@ def get_pull_requests(headers, workspace, repo_name):
     """
     Retrieve the list of pull requests for a given repository.
     """
-    url = f"{BASE_URL}/repositories/{workspace}/{repo_name}/pullrequests?state=MERGED"
+    url = f"{BASE_URL}/repositories/{workspace}/{repo_name}/pullrequests?state=MERGED&sort=-updated_on"
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     data = response.json()
-    return data['values']
+    prs = data['values']
+    with tqdm(total=data['size'], initial=len(data['values']), desc=f"    Fetching pull requests") as progress_bar:
+        while 'next' in data:
+            url = data['next']
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            prs.extend(data['values'])
+            progress_bar.update(len(data['values']))
+    return prs
 
 def get_diff(workspace, repo_slug, old_commit_id, new_commit_id, filepath):
     """
