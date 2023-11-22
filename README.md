@@ -161,5 +161,5 @@ This script is similar to the GitHub PR Coverage Analyzer but is tailored for Bi
 
 6. Run the script:
     ```bash
-    python historical_coverage_report.py
+    python historical_coverage_report.py 2> error.txt
     ```

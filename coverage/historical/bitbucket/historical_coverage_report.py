@@ -31,6 +31,7 @@ import inquirer
 from tqdm import tqdm
 import json
 import sys
+import traceback
 
 username = "rtapish"
 app_password = "ATBBRrc4kErjKAyBXKXtUTfM5HJB7F388C19"
@@ -39,7 +40,6 @@ NUM_CHARS_DIFF = 4
 
 credentials = f"{username}:{app_password}"
 base64_encoded_credentials = base64.b64encode(credentials.encode()).decode()
-
 
 def main():
     """
@@ -61,12 +61,14 @@ def main():
     }
 
     try:
-        for workspace in tqdm(selected_workspaces, desc='Processing workspaces:'):
+        for workspace in tqdm(selected_workspaces, desc='Processing workspaces:', file=sys.stdout):
             try:
                 process_workspace(workspace, headers, report)
+            except KeyboardInterrupt as ki:
+                raise KeyboardInterrupt(*ki.args)
             except Exception as e:
                 report['skipped_workspaces'].append({
-                    'name': workspace['name'],
+                    'name': workspace,
                     'reason': f"[ERROR] Something went wrong while processing the workspace {workspace}:" + str(e),
                 })
     except KeyboardInterrupt as ki:
@@ -113,9 +115,11 @@ def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_
         'skipped_repos': []
     }
     try:
-        for repo in tqdm(selected_repos, desc=f"  Processing repos in {workspace}:", leave=False):
+        for repo in tqdm(selected_repos, desc=f"  Processing repos in {workspace}:", leave=False, file=sys.stdout):
             try:
                 process_repo(workspace_report, repo, workspace, token)
+            except KeyboardInterrupt as ki:
+                raise KeyboardInterrupt(*ki.args)
             except Exception as e:
                 workspace_report['skipped_repos'].append({
                     'name': f"{workspace}/{repo['slug']}",
@@ -130,7 +134,7 @@ def process_workspace(workspace, token, report={'total_coverage': 0, 'workspace_
         if workspace_report['repos_considered'] == 0:
             report['skipped_workspaces'].append({
                 'name': workspace,
-                'reason': f"No valid repos in workspace {workspace}, not including in coverage calculation"
+                'reason': f"No valid repos in workspace {workspace}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation"
             })
         else:
             report['workspace_considered'] += 1
@@ -156,13 +160,15 @@ def process_repo(workspace_report, repo, workspace, token):
     try:
         commit_cache = {}
         diff_cache = {}
-        for pr in tqdm(get_pull_requests(token, workspace, repo['slug']), desc=f"    Processing PRs in {workspace}/{repo['slug']}:", leave=False):
+        for pr in tqdm(get_pull_requests(token, workspace, repo['slug']), desc=f"    Processing PRs in {workspace}/{repo['slug']}:", leave=False, file=sys.stdout):
             try:
                 process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache)
+            except KeyboardInterrupt as ki:
+                raise KeyboardInterrupt(*ki.args)
             except Exception as e:
                 repo_report['skipped_prs'].append({
                     'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-                    'reason': f"[ERROR] Something went wrong while processing the pull request {workspace}/{repo}/{pr.get('id', str(pr))}:" + str(e)
+                    'reason': f"[ERROR] Something went wrong while processing the pull request {workspace}/{repo['slug']}/{pr.get('id', str(pr))}: " + f"{type(e).__name__}: {str(e)}" + "\n\t" + traceback.format_exc()
                 })
     except KeyboardInterrupt as ki:
         if "manual" not in ki.args:
@@ -172,7 +178,7 @@ def process_repo(workspace_report, repo, workspace, token):
         if repo_report['prs_considered'] == 0:
             workspace_report['skipped_repos'].append({
                 'name': f"{workspace}/{repo['slug']}",
-                'reason': f"No valid prs in repo {repo['slug']}, not including in coverage calculation"
+                'reason': f"No valid prs in repo {repo['slug']}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation"
             })
         else:
             workspace_report['repos_considered'] += 1
@@ -187,23 +193,24 @@ def process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache):
     Process each pull request within a repository and calculate the coverage.
     """
     keyboard_interrupted = False
+    if pr["state"] != "MERGED":
+        repo_report['skipped_prs'].append({
+            'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
+            'reason': f"PR #{pr['id']} is not merged, not included in coverage calculation"
+        })
+        return
+
+    total_unapproved_deletions = 0
+    total_deletions = 0
+    total_unassigned = set()
     try:
-        if pr["state"] != "MERGED":
-            repo_report['skipped_prs'].append({
-                'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-                'reason': f"PR #{pr['id']} is not merged, not included in coverage calculation"
-            })
-            return
         reviewers = get_reviewers_from_activity(workspace, repo['slug'], pr['id'])
         if 'merge_commit' in pr:
             reviewers = add_merge_user(reviewers, pr["merge_commit"]["links"]["self"]["href"])
         reviewer_names = [reviewer['display_name'] for reviewer in reviewers.values()]
-        total_unapproved_deletions = 0
-        total_deletions = 0
-        total_unassigned = set()
         old_commit_hash = pr['source']['commit']['hash']
         new_commit_hash = pr['destination']['commit']['hash']
-        for file in tqdm(get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash), desc=f"      Processing files in PR #{pr['id']}:", leave=False):
+        for file in tqdm(get_files_of_pull_request(workspace, repo['slug'], old_commit_hash, new_commit_hash), desc=f"      Processing files in PR #{pr['id']}:", leave=False, file=sys.stdout):
             total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewer_names, commit_cache, diff_cache)
     
     except KeyboardInterrupt as ki:
@@ -214,7 +221,7 @@ def process_pr(repo_report, pr, repo, workspace, commit_cache, diff_cache):
         if total_deletions == 0:
             repo_report['skipped_prs'].append({
                 'pr_id': f"{workspace}/{repo['slug']}/{pr.get('id', str(pr))}",
-                'reason': f"No non-author deletions in PR #{pr['id']}, not included in coverage calculation"
+                'reason': f"No non-author deletions in PR #{pr['id']}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not included in coverage calculation"
             })
         else:
             if total_unapproved_deletions < 1 :
@@ -300,7 +307,7 @@ def get_repositories(headers, workspace):
     data = response.json()
     repos = data['values']
     total_repos = data['size']
-    with tqdm(total=total_repos, initial=len(repos), desc=f"  Fetching repos", leave=False) as progress_bar:
+    with tqdm(total=total_repos, initial=len(repos), desc=f"  Fetching repos", leave=False, file=sys.stdout) as progress_bar:
         while 'next' in data:
             url = data['next']
             response = requests.get(url, headers=headers)
@@ -337,7 +344,7 @@ def get_pull_requests(headers, workspace, repo_name):
     response.raise_for_status()
     data = response.json()
     prs = data['values']
-    with tqdm(total=data['size'], initial=len(data['values']), desc=f"    Fetching pull requests", leave=False) as progress_bar:
+    with tqdm(total=data['size'], initial=len(data['values']), desc=f"    Fetching pull requests", leave=False, file=sys.stdout) as progress_bar:
         while 'next' in data:
             url = data['next']
             response = requests.get(url, headers=headers)
@@ -464,18 +471,18 @@ def calculate_coverage_percentage(workspace, repo, pr, file, diff, reviewers, co
     # First, get the list of commits for the file up to the base commit.
     commits = get_commits_for_file(workspace, repo['slug'], file_path, commit_id)
     if not commits:
-        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] No commits for file diff: {diff}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file_path}] No commits for file diff: {diff}\n")
         return None
     # Then, fetch the diffs for each of these commits.
     diffs = [get_diff_for_commit(workspace, repo['slug'], commit["hash"], file_path, diff_cache) for commit in commits]
     if not diffs:
-        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] no diffs for commits: {commits}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file_path}] no diffs for commits: {commits}\n")
         return None
     skipped_users = set()
-    for line in tqdm(deleted_lines, desc='        Calculating coverage:', leave=False):
+    for line in tqdm(deleted_lines, desc='        Calculating coverage:', leave=False, file=sys.stdout):
         blame_author = reconstruct_blame(commits, diffs, line, commit_cache)
         if not blame_author:
-            sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] No blame author found for line : {line} in file diff: {file['old']['path']}, will be considered approved")
+            sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file_path}] No blame author found for line : {line} in file diff: {file['old']['path']}, will be considered approved\n")
             continue
         if 'user' not in blame_author:
             skipped_users.add(json.dumps(blame_author, sort_keys=True))
@@ -487,7 +494,7 @@ def calculate_coverage_percentage(workspace, repo, pr, file, diff, reviewers, co
             unapproved_deletions += 1
             unassigned_relevant.add(blame_author['user']['display_name'])
     if skipped_users:
-        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file['filename']}] Skipped Users = {skipped_users}")
+        sys.stderr.write(f"[{workspace}/{repo['slug']}/{pr['id']}/{file_path}] Skipped Users = {skipped_users}\n")
     return (unapproved_deletions, total_deletions, unassigned_relevant)
 
 def get_deleted_lines(diffstr):
@@ -537,7 +544,7 @@ def get_commits_for_file(workspace, repo_slug, file_path, commit_id):
     while url:
         response = requests.get(url, headers=headers)
         if not response.ok:
-            sys.stderr.write(f"[{workspace}/{repo_slug}/{commit_id}/{file_path}] [get_commits_for_file] error in file-history response = {response.text}")
+            sys.stderr.write(f"[{workspace}/{repo_slug}/{commit_id}/{file_path}] [get_commits_for_file] error in file-history response = {response.text}\n")
             return None
         data = response.json()
         commits.extend([value["commit"] for value in data["values"]])
@@ -557,7 +564,7 @@ def get_diff_for_commit(workspace, repo_slug, commit_id, filepath, diff_cache):
     params = {"path": filepath}
     response = requests.get(url, headers=headers, params=params)
     if not response.ok:
-        sys.stderr.write(f"[{workspace}/{repo_slug}] No diff for commit: {commit_id}, file: {filepath}")
+        sys.stderr.write(f"[{workspace}/{repo_slug}] No diff for commit: {commit_id}, file: {filepath}\n")
         return None
     diff = response.text
     diff_cache[cache_key] = diff
@@ -575,7 +582,7 @@ def get_commit_author(commit_url, commit_cache):
         return commit_cache[cache_key]
     response = requests.get(commit_url, headers=headers)
     if not response.ok:
-        sys.stderr.write(f"\t[get_commit_author] error in getting commit from URL {commit_url} = {response.text}")
+        sys.stderr.write(f"\t[get_commit_author] error in getting commit from URL {commit_url} = {response.text}\n")
         return None
     response_json = response.json()
     author = response_json["author"]
