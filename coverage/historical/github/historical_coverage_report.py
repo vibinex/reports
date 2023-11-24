@@ -18,7 +18,7 @@ How to run:
    $ pip install -r requirements.txt
 
 5. Run the script:
-   $ python historical_coverage_report.py
+   $ python historical_coverage_report.py 2> error.log
 
 When prompted, enter your GitHub token. Optionally, you can also provide a custom API URL or use the default (https://api.github.com).
 
@@ -37,8 +37,11 @@ def main():
     """
     Main function to initiate the script.
     """
-    token = input("Enter your GitHub token: ")
-    BASE_URL = input("Enter the base API URL (press Enter to use the default): ")
+    # Printing prompts separately because input() prompts are printed in stderr for some operating systems
+    sys.stdout.write("Enter your GitHub token: ")
+    token = input()
+    sys.stdout.write("Enter the base API URL (press Enter to use the default): ")
+    BASE_URL = input()
     if not BASE_URL:
         BASE_URL = "https://api.github.com"
 
@@ -85,8 +88,6 @@ def main():
         print(f"[Workspace: {workspace['name']}] coverage: {workspace['coverage'] * 100:.2f} across {workspace['repos_considered']} repositories")
         for repo in workspace['repositories']:
             print(f"  [Repo: {repo['name']}] coverage: {repo['coverage'] * 100:.2f} across {repo['prs_considered']} pull requests")
-            for pr in repo['pull_requests']:
-                print(f"    [PR: {pr['id']}] coverage: {pr['coverage'] * 100:.2f}")
     report['total_coverage'] /= report['workspace_considered']
     print(f"Workspaces analyzed: {report['workspace_considered']}")
     print(f"Total coverage across all workspaces: {report['total_coverage'] * 100:.2f}")
@@ -127,12 +128,13 @@ def process_workspace(report, workspace, token):
         if workspace_report['repos_considered'] == 0:
             report['skipped_workspaces'].append({
                 'name': workspace,
-                'reason': f"No valid repos in workspace {workspace}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation"
+                'reason': f"No valid repos in workspace {workspace}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation",
+                'repositories': workspace_report['skipped_repos']
             })
         else:
             report['workspace_considered'] += 1
             workspace_report['coverage'] /= workspace_report['repos_considered']
-            report['total_coverage'] += report['coverage']
+            report['total_coverage'] += workspace_report['coverage']
             report['workspaces'].append(workspace_report)
     if keyboard_interrupted:
         raise KeyboardInterrupt("manual")
@@ -169,7 +171,8 @@ def process_repo(workspace_report, repo, workspace, token):
         if repo_report['prs_considered'] == 0:
             workspace_report['skipped_repos'].append({
                 'name': f"{workspace}/{repo}",
-                'reason': f"No valid prs in repo {repo}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation"
+                'reason': f"No valid prs in repo {repo}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not including in coverage calculation",
+                'skipped_prs': repo_report['skipped_prs']
             })
         else:
             workspace_report['repos_considered'] += 1
@@ -190,78 +193,78 @@ def process_pr(repo_report, pr, repo, workspace, token):
         })
         return
 
-    total_unapproved_deletions = 0
-    total_deletions = 0
-    total_unassigned = set()
+    pr_report = {
+        'id': pr.get('number', str(pr)),
+        'author': pr['author']['login'],
+        'reviewers': set(),
+        'merged_by': pr['mergedBy']['login'],
+        'coverage': 0,
+        'total_unapproved_deletions': 0,
+        'total_deletions': 0,
+        'non_reviewer_relevant_authors': set(),
+        'file_level_error_logs': []
+    }
     try:
-        reviewers = [review['author']['login'] for review in pr['reviews']['nodes']]
-        if 'mergedBy' in pr and pr['mergedBy']['login'] not in reviewers:
-            reviewers.append(pr['mergedBy']['login'])
+        pr_report['reviewers'] = set([review['author']['login'] for review in pr['reviews']['nodes']])
+        if 'mergedBy' in pr and pr['mergedBy']['login'] not in pr_report['reviewers']:
+            pr_report['reviewers'].add(pr['mergedBy']['login'])
         get_files_url = f"{BASE_URL}/repos/{workspace}/{repo}/pulls/{pr['number']}/files"
         for file in tqdm(get_files_of_pull_request(get_files_url, token), desc=f"      Processing files in PR #{pr['number']}:", leave=False, file=sys.stdout):
-            total_unapproved_deletions, total_deletions, total_unassigned = process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewers, token)
+            process_file(pr_report, file, pr, repo, workspace, token)
     except KeyboardInterrupt as ki:
         if "manual" not in ki.args:
             print("\n\nKeyboardInterrupt received, exiting...")
         keyboard_interrupted = True
     finally:
-        if total_deletions == 0:
+        if pr_report['total_deletions'] == 0:
             repo_report['skipped_prs'].append({
                 'pr_id': f"{workspace}/{repo}/{pr.get('number', str(pr))}",
                 'reason': f"No non-author deletions in PR #{pr['number']}"+ (" (possibly because of KeyboardInterrupt)" if keyboard_interrupted else "") + ", not included in coverage calculation"
             })
         else:
-            if total_unapproved_deletions < 1 :
-                coverage_percentage = 1
+            if pr_report['total_unapproved_deletions'] < 1 :
+                pr_report['coverage'] = 1
             else:
-                coverage_percentage = 1 - (total_unapproved_deletions / total_deletions)
-            repo_report['coverage'] += coverage_percentage
+                pr_report['coverage'] = 1 - (pr_report['total_unapproved_deletions'] / pr_report['total_deletions'])
+            repo_report['coverage'] += pr_report['coverage']
             repo_report['prs_considered'] += 1
-            repo_report['pull_requests'].append({
-                'id': pr['number'],
-                'author': pr['author']['login'],
-                'reviewers': reviewers,
-                'merged_by': pr['mergedBy']['login'],
-                'total_deletions': total_deletions,
-                'total_unapproved_deletions': total_unapproved_deletions,
-                'relevant_authors_who_did_not_review': list(total_unassigned),
-                'coverage': coverage_percentage
-            })
+            pr_report['non_reviewer_relevant_authors'] = list(pr_report['non_reviewer_relevant_authors'])
+            pr_report['reviewers'] = list(pr_report['reviewers'])
+            repo_report['pull_requests'].append(pr_report)
     
     if keyboard_interrupted:
         raise KeyboardInterrupt("manual")
 
-def process_file(total_unapproved_deletions, total_deletions, total_unassigned, file, pr, repo, workspace, reviewers, token):
+def process_file(pr_report, file, pr, repo, workspace, token):
     """
     Process each file within a pull request and calculate the coverage.
     """
-    # sys.stderr.write(f"            Processing file: {file['filename']}\n")
     if file and 'deletions' in file and file['deletions'] > 2000:
-        # sys.stderr.write(f"       Unable to process file: {file['filename']}, cant handle file diffs larger than 2000 deletions\n")
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
+        pr_report['file_level_error_logs'].append(f"[{file['filename']}] Unable to process file, cant handle file diffs larger than 2000 deletions")
+        return
     if not file_exists_in_commit(token, workspace, repo, pr['baseRefOid'], file['filename']):
-        # sys.stderr.write(f"No file {file['filename']} in base commit\n")
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
+        pr_report['file_level_error_logs'].append(f"[{file['filename']}] File does not exist in base commit")
+        return
     if 'patch' not in file:
-        # sys.stderr.write(f"No patch in file: ${file['patch']}, not included in calculation cover of PR #{pr['number']}\n")
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
+        pr_report['file_level_error_logs'].append(f"[{file['filename']}] No patch in file, not included in calculation cover of PR #{pr['number']}.")
+        return
     diff = file['patch']
     blame = get_blame_for_commit(token, workspace, repo, pr['baseRefOid'], file['filename'])
     if not blame:
-        sys.stderr.write(f"        [WARN] Could not get blame for commit: {pr['baseRefOid']}, file: {file['filename']}\n")
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
-    unapproved_deletions_file, total_deletions_file, unassigned_authors = calculate_coverage_percentage(diff, blame, reviewers, pr['author']['login'])
+        pr_report['file_level_error_logs'].append(f"[{file['filename']}] WARN: Could not get blame for commit: {pr['baseRefOid']}, file: {file['filename']}")
+        return
+    unapproved_deletions_file, total_deletions_file, unassigned_authors = calculate_coverage_percentage(diff, blame, pr_report['reviewers'], pr['author']['login'])
     if total_deletions_file == 0:
-        # sys.stderr.write(f"                No deletions in PR #{pr['number']} in file {file['filename']}, not included in coverage calculation\n")
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
+        pr_report['file_level_error_logs'].append(f"[{file['filename']}] No deletions in file, not included in coverage calculation")
+        return
     if unapproved_deletions_file > 0 and (unassigned_authors == None or len(unassigned_authors) == 0):
         # No blame authors found for unapproved deleted lines
-        return (total_unapproved_deletions, total_deletions, total_unassigned)
+        return
     # sys.stderr.write(f"file = {file["filename"]} {unapproved_deletions_file} {total_deletions_file} {unassigned_authors} {total_unassigned}\n")
-    total_unapproved_deletions += unapproved_deletions_file
-    total_deletions += total_deletions_file
-    total_unassigned = total_unassigned.union(unassigned_authors)
-    return (total_unapproved_deletions, total_deletions, total_unassigned)
+    pr_report['total_unapproved_deletions'] += unapproved_deletions_file
+    pr_report['total_deletions'] += total_deletions_file
+    pr_report['non_reviewer_relevant_authors'] = pr_report['non_reviewer_relevant_authors'].union(unassigned_authors)
+    return
 
 def run_query(query, token):
     """
