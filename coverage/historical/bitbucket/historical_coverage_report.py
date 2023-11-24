@@ -83,6 +83,9 @@ def main():
 
     if report['workspace_considered'] == 0:
         print("No workspace with valid repos, unable to perform coverage calculation")
+        with open('report.json', 'w') as f:
+            json.dump(report, f, indent=4)
+        sys.stderr.flush()
         return
     
     for workspace in report['workspaces']:
