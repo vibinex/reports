@@ -114,6 +114,8 @@ def process_workspace(report, workspace, token):
         for repo in tqdm(selected_repositories, desc=f"  Processing repos in {workspace}:", leave=False, file=sys.stdout):
             try:
                 process_repo(workspace_report, repo, workspace, token)
+            except KeyboardInterrupt as ki:
+                raise KeyboardInterrupt(*ki.args)
             except Exception as e:
                 workspace_report['skipped_repos'].append({
                     'name': f"{workspace}/{repo}",
