@@ -290,7 +290,7 @@ def get_workspaces(token):
     query = """
     {
       viewer {
-        organizations(first: 100) {
+        organizations(first: 100, orderBy: {field: CREATED_AT, direction: DESC}) {
           nodes {
             login
           }
@@ -325,7 +325,7 @@ def get_repositories(token, workspace):
     query = f"""
     {{
       organization(login: "{workspace}") {{
-        repositories(first: 100) {{
+        repositories(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100) {{
           nodes {{
             name
           }}
@@ -364,7 +364,7 @@ def get_pull_requests(token, workspace, repo_name):
     query = f"""
     {{
       repository(owner: "{workspace}", name: "{repo_name}") {{
-        pullRequests(first: 100) {{
+        pullRequests(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100) {{
           nodes {{
             number
             state
