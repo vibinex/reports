@@ -105,27 +105,12 @@ This script calculates the coverage percentage of merged pull requests on GitHub
 
 5. Run the script:
     ```bash
-    python historical_coverage_report.py
+    python historical_coverage_report.py 2> error.log
     ```
 
 6. When prompted, enter the personal access token generated in step 1. If you use github cloud, you don't need to provide BASE_URL, just press Enter. Otherwise, enter your github organization's url.
 
-Alternatively, if you want to run this in the background, you can create an input file with your personal access token and the GitHub API URL.
-
-`input.txt`:
-```
-your_github_auth_token
-https://api.github.com
-```
-And then run the python command in the background:
-```bash
-python3 -u historical_coverage_report.py < input.txt > output.txt &
-```
-
-You can monitor the output by using the `tail` command:
-```bash
-tail -f output.txt
-```
+7. When prompted, choose the organizations (and later, repositories) that you want the script in analyse. Press SPACE to select or deselect an option and press ENTER to confirm.
 
 ## Bitbucket PR Coverage Analyzer
 
@@ -161,5 +146,7 @@ This script is similar to the GitHub PR Coverage Analyzer but is tailored for Bi
 
 6. Run the script:
     ```bash
-    python historical_coverage_report.py 2> error.txt
+    python historical_coverage_report.py 2> error.log
     ```
+
+7. When prompted, choose the workspaces (and later, repositories) that you want the script in analyse. Press SPACE to select or deselect an option and press ENTER to confirm.

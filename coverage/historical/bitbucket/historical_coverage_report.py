@@ -20,7 +20,7 @@ How to run:
 5. Add your config like username, app_password in the script at the top
 
 6. Run the script:
-   $ python historical_coverage_report.py
+   $ python historical_coverage_report.py 2> error.log
 """
 import re
 import requests
