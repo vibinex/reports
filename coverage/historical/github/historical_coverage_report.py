@@ -361,10 +361,14 @@ def get_pull_requests(token, workspace, repo_name):
     """
     Retrieve the list of pull requests for a given repository.
     """
-    query = f"""
+    query_template = """
     {{
       repository(owner: "{workspace}", name: "{repo_name}") {{
-        pullRequests(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100) {{
+        pullRequests(orderBy: {{field: CREATED_AT, direction: DESC}}, first: 100{after}) {{
+          pageInfo {{
+            hasNextPage
+            endCursor
+          }}
           nodes {{
             number
             state
@@ -388,8 +392,16 @@ def get_pull_requests(token, workspace, repo_name):
       }}
     }}
     """
-    result = run_query(query, token)
-    return result['data']['repository']['pullRequests']['nodes']
+    result = run_query(query_template.format(workspace=workspace, repo_name=repo_name, after=""), token)
+    nodes = result['data']['repository']['pullRequests']['nodes']
+    has_next_page = result['data']['repository']['pullRequests']['pageInfo']['hasNextPage']
+    end_cursor = result['data']['repository']['pullRequests']['pageInfo']['endCursor']
+    while has_next_page:
+        result = run_query(query_template.format(workspace=workspace, repo_name=repo_name, after=f', after: "{end_cursor}"'), token)
+        nodes += result['data']['repository']['pullRequests']['nodes']
+        has_next_page = result['data']['repository']['pullRequests']['pageInfo']['hasNextPage']
+        end_cursor = result['data']['repository']['pullRequests']['pageInfo']['endCursor']
+    return nodes
 
 def get_blame_for_commit(token, workspace, repo_name, commit_oid, path):
     """
