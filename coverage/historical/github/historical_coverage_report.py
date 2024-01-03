@@ -198,6 +198,7 @@ def process_pr(repo_report, pr, repo, workspace, token):
     pr_report = {
         'id': pr.get('number', str(pr)),
         'author': pr['author']['login'],
+        'vibinex_commented': pr.get('vibinex_commented', False),
         'reviewers': set(),
         'merged_by': pr['mergedBy']['login'],
         'coverage': 0,
@@ -387,6 +388,13 @@ def get_pull_requests(token, workspace, repo_name):
               }}
             }}
             baseRefOid
+            comments_authors: comments(first: 100) {{
+              nodes {{
+                author {{
+                  login
+                }}
+              }}
+            }}
           }}
         }}
       }}
@@ -401,6 +409,14 @@ def get_pull_requests(token, workspace, repo_name):
         nodes += result['data']['repository']['pullRequests']['nodes']
         has_next_page = result['data']['repository']['pullRequests']['pageInfo']['hasNextPage']
         end_cursor = result['data']['repository']['pullRequests']['pageInfo']['endCursor']
+    for node in nodes:
+        comments_authors = node['comments_authors']['nodes']
+        for comment_author in comments_authors:
+            if comment_author['author']['login'] in ['vibinex-dpu', 'vibinex-code-review']:
+                node['vibinex_commented'] = True
+                break
+        else:
+            node['vibinex_commented'] = False
     return nodes
 
 def get_blame_for_commit(token, workspace, repo_name, commit_oid, path):
