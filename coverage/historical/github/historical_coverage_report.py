@@ -50,7 +50,12 @@ def main():
 
     report = {
         'total_coverage': 0,
+        'relative_coverage': {
+            'vibinex': 0,
+            'non-vibinex': 0,
+        },
         'workspace_considered': 0,
+        'vibinex_workspaces_considered': 0,
         'workspaces': [],
         'skipped_workspaces': []
     }
@@ -71,6 +76,9 @@ def main():
             print("\n\nKeyboardInterrupt received, exiting...")
         if len(report['workspaces']) > 0:
             report['total_coverage'] /= len(report['workspaces'])
+            if (report['vibinex_workspaces_considered'] > 0):
+                report['relative_coverage']['vibinex'] /= report['vibinex_workspaces_considered']
+                report['relative_coverage']['non-vibinex'] /= report['vibinex_workspaces_considered']
         print("\n\nGenerating report...")
         with open('report.json', 'w') as f:
             json.dump(report, f, indent=4)
@@ -86,11 +94,19 @@ def main():
 
     for workspace in report['workspaces']:
         print(f"[Workspace: {workspace['name']}] coverage: {workspace['coverage'] * 100:.2f} across {workspace['repos_considered']} repositories")
+        if (workspace['repos_w_vibinex_considered'] > 0):
+            print(f"[Workspace: {workspace['name']}] \tRelative coverage: {workspace['relative_coverage']['vibinex'] * 100:.2f} in Vibinex PRs versus {workspace['relative_coverage']['non-vibinex'] * 100:.2f} in non-Vibinex PRs across {workspace['repos_w_vibinex_considered']} vibinex-enabled repositories")
         for repo in workspace['repositories']:
             print(f"  [Repo: {repo['name']}] coverage: {repo['coverage'] * 100:.2f} across {repo['prs_considered']} pull requests")
+            if (repo['vibinex_prs_considered'] > 0):
+                print(f"  [Repo: {repo['name']}] \tRelative coverage: {repo['relative_coverage']['vibinex'] * 100:.2f} in Vibinex PRs versus {repo['relative_coverage']['non-vibinex'] * 100:.2f} in non-Vibinex PRs across {repo['vibinex_prs_considered']} vibinex-enabled pull requests")
     report['total_coverage'] /= report['workspace_considered']
+    if (report['vibinex_workspaces_considered'] > 0):
+        report['relative_coverage']['vibinex'] /= report['vibinex_workspaces_considered']
+        report['relative_coverage']['non-vibinex'] /= report['vibinex_workspaces_considered']
     print(f"Workspaces analyzed: {report['workspace_considered']}")
     print(f"Total coverage across all workspaces: {report['total_coverage'] * 100:.2f}")
+    print(f"  Relative coverage across all vibinex-enabled repositories across all workspaces: Vibinex - {report['relative_coverage']['vibinex'] * 100:.2f} vs Non-Vibinex - {report['relative_coverage']['non-vibinex'] * 100:.2f}")
     with open('report.json', 'w') as f:
         json.dump(report, f, indent=4)
     sys.stderr.flush()
@@ -106,7 +122,12 @@ def process_workspace(report, workspace, token):
     workspace_report = {
         'name': workspace,
         'coverage': 0,
+        'relative_coverage': {
+            'vibinex': 0,
+            'non-vibinex': 0,
+        },
         'repos_considered': 0,
+        'repos_w_vibinex_considered': 0,
         'repositories': [],
         'skipped_repos': []
     }
@@ -136,6 +157,12 @@ def process_workspace(report, workspace, token):
         else:
             report['workspace_considered'] += 1
             workspace_report['coverage'] /= workspace_report['repos_considered']
+            if (workspace_report['repos_w_vibinex_considered'] > 0):
+                report['vibinex_workspaces_considered'] += 1
+                workspace_report['relative_coverage']['vibinex'] /= workspace_report['repos_w_vibinex_considered']  
+                workspace_report['relative_coverage']['non-vibinex'] /= workspace_report['repos_w_vibinex_considered']
+                report['relative_coverage']['vibinex'] += workspace_report['relative_coverage']['vibinex']
+                report['relative_coverage']['non-vibinex'] += workspace_report['relative_coverage']['non-vibinex']
             report['total_coverage'] += workspace_report['coverage']
             report['workspaces'].append(workspace_report)
     if keyboard_interrupted:
@@ -149,7 +176,12 @@ def process_repo(workspace_report, repo, workspace, token):
     repo_report = {
         'name': repo,
         'coverage': 0,
+        'relative_coverage': {
+            'vibinex': 0,
+            'non-vibinex': 0,
+        },
         'prs_considered': 0,
+        'vibinex_prs_considered': 0,
         'pull_requests': [],
         'skipped_prs': []
     }
@@ -181,6 +213,12 @@ def process_repo(workspace_report, repo, workspace, token):
             repo_report['coverage'] /= repo_report['prs_considered']
             workspace_report['coverage'] += repo_report['coverage']
             workspace_report['repositories'].append(repo_report)
+            repo_report['relative_coverage']['vibinex'] /= repo_report['vibinex_prs_considered'] if (repo_report['vibinex_prs_considered'] > 0) else 1
+            repo_report['relative_coverage']['non-vibinex'] /= (repo_report['prs_considered'] - repo_report['vibinex_prs_considered']) if (repo_report['prs_considered'] > repo_report['vibinex_prs_considered']) else 1
+            if (repo_report['vibinex_prs_considered'] > 0):
+                workspace_report['repos_w_vibinex_considered'] += 1
+                workspace_report['relative_coverage']['vibinex'] += repo_report['relative_coverage']['vibinex']
+                workspace_report['relative_coverage']['non-vibinex'] += repo_report['relative_coverage']['non-vibinex']
     return
 
 def process_pr(repo_report, pr, repo, workspace, token):
@@ -230,7 +268,10 @@ def process_pr(repo_report, pr, repo, workspace, token):
             else:
                 pr_report['coverage'] = 1 - (pr_report['total_unapproved_deletions'] / pr_report['total_deletions'])
             repo_report['coverage'] += pr_report['coverage']
+            repo_report['relative_coverage']['vibinex'] += pr_report['coverage'] if (pr_report['vibinex_commented']) else 0
+            repo_report['relative_coverage']['non-vibinex'] += pr_report['coverage'] if (not pr_report['vibinex_commented']) else 0
             repo_report['prs_considered'] += 1
+            repo_report['vibinex_prs_considered'] += int(pr_report['vibinex_commented'])
             pr_report['non_reviewer_relevant_authors'] = list(pr_report['non_reviewer_relevant_authors'])
             pr_report['reviewers'] = list(pr_report['reviewers'])
             repo_report['pull_requests'].append(pr_report)
