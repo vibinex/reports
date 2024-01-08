@@ -9,7 +9,6 @@ Workspace: alokit-innovations
     Total deletions considered in PR: 12, unapproved deletions: 0, repo_coverage: 1
     ============<Coverage percentage for Merged PR #10: 100.00%>=============
         Processing Pr #4
-        No non-author deletions in PR #4, not included in coverage calculation
         Processing Pr #2
         No non-author deletions in PR #2, not included in coverage calculation
         Processing Pr #1
