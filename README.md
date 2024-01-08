@@ -1,6 +1,6 @@
 # Repository Coverage Report
 
-This repository contains scripts to generate coverage report for github and bitbucket. Sample output -
+This repository contains scripts to generate coverage report for github and bitbucket. Sample output
 ```
 Workspace: alokit-innovations
   Repository: dev-profiler
