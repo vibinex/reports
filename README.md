@@ -6,7 +6,7 @@ Workspace: alokit-innovations
   Repository: dev-profiler
         Processing Pr #10
      Processing PR #10 with author: vibi-test and reviewers: ['Tapish Rathore', 'vibi-test']
-    Total deletions considered in PR: 12, unapproved deletions: 0, repo_coverage: 1, prs_considered: 1
+    Total deletions considered in PR: 12, unapproved deletions: 0, repo_coverage: 1
     ============<Coverage percentage for Merged PR #10: 100.00%>=============
         Processing Pr #4
         No non-author deletions in PR #4, not included in coverage calculation
